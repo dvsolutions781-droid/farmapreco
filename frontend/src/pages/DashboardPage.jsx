@@ -74,7 +74,7 @@ export default function DashboardPage() {
           <StatCard
             icon={<ChartIcon size={20} color="#7C3AED" />}
             label="Buscas realizadas"
-            value={stats ? stats.totalBuscas.toString() : '0'}
+            value={(stats?.totalBuscas ?? 0).toString()}
             sub="nesta sessão"
             bg="#EDE9FE"
             color="#7C3AED"
