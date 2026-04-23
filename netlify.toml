@@ -1,0 +1,39 @@
+[build]
+  publish = "frontend/dist"
+  command = "npm install && cd frontend && npm install && npm run build"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Redirects de API — ordem importa: mais específico primeiro
+[[redirects]]
+  from = "/api/basket/compare"
+  to = "/.netlify/functions/basket"
+  status = 200
+
+[[redirects]]
+  from = "/api/basket/*"
+  to = "/.netlify/functions/basket"
+  status = 200
+
+[[redirects]]
+  from = "/api/basket"
+  to = "/.netlify/functions/basket"
+  status = 200
+
+[[redirects]]
+  from = "/api/search"
+  to = "/.netlify/functions/search"
+  status = 200
+
+[[redirects]]
+  from = "/api/stats"
+  to = "/.netlify/functions/stats"
+  status = 200
+
+# SPA fallback — deve ser o último
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
