@@ -32,6 +32,11 @@
   to = "/.netlify/functions/stats"
   status = 200
 
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
 # SPA fallback — deve ser o último
 [[redirects]]
   from = "/*"
