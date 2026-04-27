@@ -24,7 +24,7 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
-  const { q, gtin, dias = '7' } = event.queryStringParameters || {};
+  const { q, gtin, dias = '7', lat, lng } = event.queryStringParameters || {};
 
   if (!q && !gtin) {
     return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Informe q (descrição) ou gtin' }) };
@@ -34,11 +34,13 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Busca deve ter pelo menos 2 caracteres' }) };
   }
 
+  const estabelecimento = lat && lng
+    ? { geolocalizacao: { latitude: parseFloat(lat), longitude: parseFloat(lng), raio: 15 } }
+    : { municipio: { codigoIBGE: parseInt(process.env.MUNICIPIO_IBGE) || 2704302 } };
+
   const body = {
     produto: {},
-    estabelecimento: {
-      municipio: { codigoIBGE: parseInt(process.env.MUNICIPIO_IBGE) || 2704302 }
-    },
+    estabelecimento,
     dias: Math.min(parseInt(dias) || 7, 10)
   };
 

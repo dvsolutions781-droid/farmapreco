@@ -22,6 +22,9 @@ export default function ResultsPage() {
   const navigate = useNavigate();
   const q = params.get('q');
   const gtin = params.get('gtin');
+  const lat = params.get('lat');
+  const lng = params.get('lng');
+  const location = lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null;
   const { add, isInBasket } = useBasket();
 
   const [data, setData] = useState(null);
@@ -43,7 +46,7 @@ export default function ResultsPage() {
       setCidadeSel('');
       setBairroSel('');
       try {
-        const result = await api.search(q, gtin);
+        const result = await api.search(q, gtin, 7, location);
         if (!cancelled) setData(result);
       } catch (err) {
         if (!cancelled) setError(err.message);

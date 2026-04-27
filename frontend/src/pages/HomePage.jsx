@@ -23,16 +23,17 @@ export default function HomePage() {
   const [descricao, setDescricao] = useState('');
   const [showScanner, setShowScanner] = useState(false);
   const navigate = useNavigate();
-  const { status: geoStatus } = useGeoLocation();
+  const { status: geoStatus, location } = useGeoLocation();
 
   const canSearch = gtin.trim().length >= 2 || descricao.trim().length >= 2;
 
   const handleSearch = () => {
     if (!canSearch) return;
+    const geo = location ? `&lat=${location.lat}&lng=${location.lng}` : '';
     if (gtin.trim()) {
-      navigate(`/results?gtin=${encodeURIComponent(gtin.trim())}`);
+      navigate(`/results?gtin=${encodeURIComponent(gtin.trim())}${geo}`);
     } else {
-      navigate(`/results?q=${encodeURIComponent(descricao.trim())}`);
+      navigate(`/results?q=${encodeURIComponent(descricao.trim())}${geo}`);
     }
   };
 
@@ -195,10 +196,10 @@ export default function HomePage() {
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {geoStatus === 'granted'
-                  ? <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>● </span>
-                  : null}
-                <span style={{ fontWeight: 500 }}>MACEIÓ</span>
+                <span style={{ fontSize: 12, color: geoStatus === 'granted' ? 'var(--green)' : 'var(--amber)', fontWeight: 500 }}>●</span>
+                <span style={{ fontWeight: 500 }}>
+                  {geoStatus === 'granted' ? 'Localização atual (raio 15 km)' : 'MACEIÓ'}
+                </span>
               </div>
               <ChevronDownIcon size={16} />
             </div>
