@@ -28,12 +28,12 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  search: (q, gtin, dias = 7, location = null) => {
+  search: (q, gtin, dias = 7, location = null, ibge = null) => {
     const params = new URLSearchParams({ dias });
     if (gtin) params.set('gtin', gtin);
     else if (q) params.set('q', q);
-    if (location?.lat) params.set('lat', location.lat);
-    if (location?.lng) params.set('lng', location.lng);
+    if (location?.lat) { params.set('lat', location.lat); params.set('lng', location.lng); }
+    else if (ibge) params.set('ibge', ibge);
     return request(`/search?${params}`);
   },
 
