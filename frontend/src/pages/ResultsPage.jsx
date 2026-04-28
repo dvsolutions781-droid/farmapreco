@@ -258,12 +258,16 @@ export default function ResultsPage() {
           <div className="empty-state">
             <div className="empty-icon"><SearchIcon size={28} /></div>
             <div style={{ fontWeight: 600, fontSize: 16 }}>
-              {temFiltro ? 'Nenhum produto nessa região' : 'Nenhum produto encontrado'}
+              {data?.apiIndisponivel
+                ? 'API SEFAZ indisponível'
+                : temFiltro ? 'Nenhum produto nessa região' : 'Nenhum produto encontrado'}
             </div>
             <div style={{ fontSize: 14 }}>
-              {temFiltro ? 'Tente outros filtros de cidade ou bairro' : 'Tente termos diferentes'}
+              {data?.apiIndisponivel
+                ? 'O servidor do Economiza Alagoas está temporariamente fora do ar. Tente novamente em alguns minutos.'
+                : temFiltro ? 'Tente outros filtros de cidade ou bairro' : 'Tente termos diferentes'}
             </div>
-            {temFiltro && (
+            {temFiltro && !data?.apiIndisponivel && (
               <button className="btn btn-primary btn-sm" style={{ marginTop: 4 }} onClick={limparFiltros}>
                 Limpar filtros
               </button>

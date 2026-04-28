@@ -6,7 +6,7 @@ const cache = new NodeCache({ stdTTL: parseInt(process.env.CACHE_TTL) || 300 });
 
 const sefazClient = axios.create({
   baseURL: process.env.SEFAZ_API_URL || 'http://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public',
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
     'AppToken': process.env.SEFAZ_APP_TOKEN || ''
@@ -18,16 +18,17 @@ async function searchProducts({ descricao, gtin, dias = 7 }) {
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
-  const body = {
+  const bodyBase = {
     produto: {},
     estabelecimento: {
       municipio: { codigoIBGE: parseInt(process.env.MUNICIPIO_IBGE) || 2704302 }
     },
-    dias
+    dias,
+    registrosPorPagina: 5000
   };
 
-  if (gtin) body.produto.gtin = gtin;
-  else if (descricao) body.produto.descricao = descricao.toUpperCase();
+  if (gtin) bodyBase.produto.gtin = gtin;
+  else if (descricao) bodyBase.produto.descricao = descricao.toUpperCase();
   else throw new Error('Informe descrição ou GTIN do produto');
 
   let usedMock = false;
@@ -37,8 +38,21 @@ async function searchProducts({ descricao, gtin, dias = 7 }) {
     if (!process.env.SEFAZ_APP_TOKEN || process.env.SEFAZ_APP_TOKEN === 'SEU_TOKEN_AQUI') {
       throw new Error('Token não configurado');
     }
-    const response = await sefazClient.post('/produto/pesquisa', body);
-    rawData = response.data;
+
+    const primeira = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina: 1 });
+    const dadosPrimeira = primeira.data;
+    const totalPaginas = dadosPrimeira.totalPaginas || 1;
+    const conteudo = [...(dadosPrimeira.conteudo || [])];
+
+    console.log(`[SEFAZ] totalRegistros=${dadosPrimeira.totalRegistros} totalPaginas=${totalPaginas}`);
+
+    for (let pagina = 2; pagina <= totalPaginas; pagina++) {
+      const resp = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina });
+      if (resp.data?.conteudo?.length) conteudo.push(...resp.data.conteudo);
+      if (resp.data?.ultimaPagina) break;
+    }
+
+    rawData = { ...dadosPrimeira, conteudo };
   } catch (err) {
     console.warn(`[SEFAZ API] Usando dados simulados. Motivo: ${err.message}`);
     const mockResult = getMockData(descricao || gtin);
@@ -198,7 +212,8 @@ function normalizeLegacy(data, query) {
 
 function formatEndereco(e) {
   if (!e) return '';
-  return [e.logradouro, e.numero, e.bairro, e.municipio].filter(Boolean).join(', ');
+  // Campos conforme manual da API: nomeLogradouro e numeroImovel
+  return [e.nomeLogradouro || e.logradouro, e.numeroImovel || e.numero, e.bairro, e.municipio].filter(Boolean).join(', ');
 }
 
 // Tenta extrair bairro do padrão "Rua X, 123 - Bairro, Cidade"

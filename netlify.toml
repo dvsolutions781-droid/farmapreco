@@ -5,6 +5,7 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  timeout = 26
 
 # Redirects de API — ordem importa: mais específico primeiro
 [[redirects]]

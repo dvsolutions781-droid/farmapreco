@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const sefazClient = axios.create({
   baseURL: process.env.SEFAZ_API_URL || 'http://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public',
-  timeout: 15000,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
     'AppToken': process.env.SEFAZ_APP_TOKEN || ''
@@ -38,25 +38,44 @@ exports.handler = async (event) => {
     ? { geolocalizacao: { latitude: parseFloat(lat), longitude: parseFloat(lng), raio: 15 } }
     : { municipio: { codigoIBGE: parseInt(ibge) || parseInt(process.env.MUNICIPIO_IBGE) || 2704302 } };
 
-  const body = {
+  const bodyBase = {
     produto: {},
     estabelecimento,
-    dias: Math.min(parseInt(dias) || 7, 10)
+    dias: Math.min(parseInt(dias) || 7, 10),
+    registrosPorPagina: 500
   };
 
-  if (gtin) body.produto.gtin = gtin.trim();
-  else body.produto.descricao = q.trim().toUpperCase();
+  if (gtin) bodyBase.produto.gtin = gtin.trim();
+  else bodyBase.produto.descricao = q.trim().toUpperCase();
 
   try {
-    const response = await sefazClient.post('/produto/pesquisa', body);
-    const normalized = normalizeResponse(response.data, q || gtin);
+    const primeira = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina: 1 });
+    const dadosPrimeira = primeira.data;
+    const totalPaginas = Math.min(dadosPrimeira.totalPaginas || 1, 5);
+    const conteudo = [...(dadosPrimeira.conteudo || [])];
+
+    for (let pagina = 2; pagina <= totalPaginas; pagina++) {
+      const resp = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina });
+      if (resp.data?.conteudo?.length) conteudo.push(...resp.data.conteudo);
+      if (resp.data?.ultimaPagina) break;
+    }
+
+    const normalized = normalizeResponse({ ...dadosPrimeira, conteudo }, q || gtin);
     return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify(normalized) };
   } catch (err) {
     console.error('[search] erro SEFAZ:', err.message);
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'Erro ao consultar API SEFAZ', detail: err.message })
+      body: JSON.stringify({
+        query: q || gtin,
+        total: 0,
+        totalRegistros: 0,
+        produtos: [],
+        filtros: { cidades: [], bairros: [] },
+        apiIndisponivel: true,
+        timestamp: new Date().toISOString()
+      })
     };
   }
 };
