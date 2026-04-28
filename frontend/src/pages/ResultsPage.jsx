@@ -264,7 +264,7 @@ export default function ResultsPage() {
             </div>
             <div style={{ fontSize: 14 }}>
               {data?.apiIndisponivel
-                ? 'O servidor do Economiza Alagoas está temporariamente fora do ar. Tente novamente em alguns minutos.'
+                ? `O servidor do Economiza Alagoas está temporariamente fora do ar. Tente novamente em alguns minutos.${data.errCode ? ` [${data.errCode}]` : ''}`
                 : temFiltro ? 'Tente outros filtros de cidade ou bairro' : 'Tente termos diferentes'}
             </div>
             {temFiltro && !data?.apiIndisponivel && (

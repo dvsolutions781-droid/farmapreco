@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const sefazClient = axios.create({
   baseURL: process.env.SEFAZ_API_URL || 'http://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public',
-  timeout: 8000,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
     'AppToken': process.env.SEFAZ_APP_TOKEN || ''
@@ -53,7 +53,9 @@ exports.handler = async (event) => {
     const normalized = normalizeResponse(response.data, q || gtin);
     return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify(normalized) };
   } catch (err) {
-    console.error('[search] erro SEFAZ:', err.message);
+    const errCode = err.code || (err.response ? `HTTP_${err.response.status}` : 'UNKNOWN');
+    const errMsg = err.response?.data ? JSON.stringify(err.response.data).slice(0, 200) : err.message;
+    console.error('[search] erro SEFAZ:', errCode, errMsg);
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
@@ -64,6 +66,8 @@ exports.handler = async (event) => {
         produtos: [],
         filtros: { cidades: [], bairros: [] },
         apiIndisponivel: true,
+        errCode,
+        errMsg,
         timestamp: new Date().toISOString()
       })
     };
