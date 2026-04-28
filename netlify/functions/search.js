@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const sefazClient = axios.create({
   baseURL: process.env.SEFAZ_API_URL || 'http://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public',
-  timeout: 20000,
+  timeout: 9000,
   headers: {
     'Content-Type': 'application/json',
     'AppToken': process.env.SEFAZ_APP_TOKEN || ''
@@ -42,7 +42,7 @@ exports.handler = async (event) => {
     produto: {},
     estabelecimento,
     dias: Math.min(parseInt(dias) || 7, 10),
-    registrosPorPagina: 500
+    registrosPorPagina: 50
   };
 
   if (gtin) bodyBase.produto.gtin = gtin.trim();
