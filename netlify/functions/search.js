@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const sefazClient = axios.create({
   baseURL: process.env.SEFAZ_API_URL || 'http://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public',
-  timeout: 20000,
+  timeout: 8000,
   headers: {
     'Content-Type': 'application/json',
     'AppToken': process.env.SEFAZ_APP_TOKEN || ''
@@ -49,18 +49,8 @@ exports.handler = async (event) => {
   else bodyBase.produto.descricao = q.trim().toUpperCase();
 
   try {
-    const primeira = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina: 1 });
-    const dadosPrimeira = primeira.data;
-    const totalPaginas = Math.min(dadosPrimeira.totalPaginas || 1, 5);
-    const conteudo = [...(dadosPrimeira.conteudo || [])];
-
-    for (let pagina = 2; pagina <= totalPaginas; pagina++) {
-      const resp = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina });
-      if (resp.data?.conteudo?.length) conteudo.push(...resp.data.conteudo);
-      if (resp.data?.ultimaPagina) break;
-    }
-
-    const normalized = normalizeResponse({ ...dadosPrimeira, conteudo }, q || gtin);
+    const response = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina: 1 });
+    const normalized = normalizeResponse(response.data, q || gtin);
     return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify(normalized) };
   } catch (err) {
     console.error('[search] erro SEFAZ:', err.message);
