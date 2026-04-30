@@ -1,31 +1,65 @@
+const https = require('https');
+
 const CORS_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, X-Session-Id'
 };
 
-const SEFAZ_BASE = process.env.SEFAZ_API_URL
-  || 'https://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public';
+const SEFAZ_HOST = 'api.sefaz.al.gov.br';
+const SEFAZ_PATH = '/sfz-economiza-alagoas-api/api/public/produto/pesquisa';
 const APP_TOKEN = process.env.SEFAZ_APP_TOKEN || '';
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: CORS_HEADERS, body: '' };
-  }
+// Cert auto-assinado/expirado na SEFAZ — bypass necessário
+const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
 
-  if (event.httpMethod !== 'GET') {
-    return { statusCode: 405, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-  }
+function sefazPost(body, timeoutMs = 9000) {
+  return new Promise((resolve, reject) => {
+    const bodyStr = JSON.stringify(body);
+    const req = https.request(
+      {
+        hostname: SEFAZ_HOST,
+        path: SEFAZ_PATH,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(bodyStr),
+          'AppToken': APP_TOKEN
+        },
+        agent,
+        timeout: timeoutMs
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks).toString();
+          try {
+            resolve({ status: res.statusCode, data: JSON.parse(raw) });
+          } catch {
+            reject(Object.assign(new Error(`JSON inválido: ${raw.slice(0, 120)}`), { code: 'JSON_PARSE' }));
+          }
+        });
+        res.on('error', reject);
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy();
+      reject(Object.assign(new Error('Timeout 9s'), { code: 'TIMEOUT_9S' }));
+    });
+    req.on('error', reject);
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS_HEADERS, body: '' };
+  if (event.httpMethod !== 'GET') return { statusCode: 405, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 
   const { q, gtin, dias = '7', lat, lng, ibge } = event.queryStringParameters || {};
-
-  if (!q && !gtin) {
-    return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Informe q (descrição) ou gtin' }) };
-  }
-
-  if (q && q.trim().length < 2) {
-    return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Busca deve ter pelo menos 2 caracteres' }) };
-  }
+  if (!q && !gtin) return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Informe q ou gtin' }) };
+  if (q && q.trim().length < 2) return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Busca deve ter pelo menos 2 caracteres' }) };
 
   const estabelecimento = lat && lng
     ? { geolocalizacao: { latitude: parseFloat(lat), longitude: parseFloat(lng), raio: 15 } }
@@ -40,32 +74,15 @@ exports.handler = async (event) => {
   };
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 9000);
-
-    const response = await fetch(`${SEFAZ_BASE}/produto/pesquisa`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'AppToken': APP_TOKEN },
-      body: JSON.stringify(bodyReq),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => '');
-      throw Object.assign(new Error(errBody.slice(0, 200) || `status ${response.status}`), {
-        code: `HTTP_${response.status}`
-      });
+    const { status, data } = await sefazPost(bodyReq);
+    if (status < 200 || status >= 300) {
+      throw Object.assign(new Error(JSON.stringify(data).slice(0, 200)), { code: `HTTP_${status}` });
     }
-
-    const data = await response.json();
-    const normalized = normalizeResponse(data, q || gtin);
-    return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify(normalized) };
-
+    return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify(normalizeResponse(data, q || gtin)) };
   } catch (err) {
-    const errCode = err.name === 'AbortError' ? 'TIMEOUT_9S' : (err.code || err.name || 'UNKNOWN');
+    const errCode = err.code || err.name || 'UNKNOWN';
     const errMsg = (err.message || '').slice(0, 300);
-    console.error('[search] erro SEFAZ:', errCode, errMsg);
+    console.error('[search] SEFAZ erro:', errCode, errMsg);
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
@@ -94,9 +111,7 @@ function normalizeResponse(data, query) {
     if (!p || !e) continue;
 
     const chave = p.gtin || p.codigo || p.descricao || '';
-    if (!mapaGtin.has(chave)) {
-      mapaGtin.set(chave, { produto: p, estabelecimentos: [] });
-    }
+    if (!mapaGtin.has(chave)) mapaGtin.set(chave, { produto: p, estabelecimentos: [] });
 
     const endObj = e.endereco || e['endereço'] || {};
     mapaGtin.get(chave).estabelecimentos.push({
