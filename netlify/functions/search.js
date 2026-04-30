@@ -8,7 +8,7 @@ const CORS_HEADERS = {
 
 const APP_TOKEN = process.env.SEFAZ_APP_TOKEN || '';
 
-function sefazPost(body, timeoutMs = 9000) {
+function sefazPost(body, timeoutMs = 8500) {
   return new Promise((resolve, reject) => {
     const bodyStr = JSON.stringify(body);
     const req = http.request(
@@ -59,9 +59,7 @@ exports.handler = async (event) => {
   const bodyReq = {
     produto: gtin ? { gtin: gtin.trim() } : { descricao: q.trim().toUpperCase() },
     estabelecimento,
-    dias: Math.min(parseInt(dias) || 7, 10),
-    registrosPorPagina: 50,
-    pagina: 1
+    dias: Math.min(parseInt(dias) || 7, 10)
   };
 
   try {
