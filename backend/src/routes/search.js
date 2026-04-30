@@ -6,7 +6,7 @@ const { searchProducts } = require('../services/sefazService');
 // GET /api/search?gtin=7896004724032
 router.get('/', async (req, res) => {
   try {
-    const { q, gtin, dias = 7 } = req.query;
+    const { q, gtin, dias = 7, lat, lng, ibge } = req.query;
 
     if (!q && !gtin) {
       return res.status(400).json({ error: 'Informe q (descrição) ou gtin' });
@@ -19,7 +19,8 @@ router.get('/', async (req, res) => {
     const result = await searchProducts({
       descricao: q ? q.trim() : undefined,
       gtin: gtin ? gtin.trim() : undefined,
-      dias: parseInt(dias)
+      dias: parseInt(dias),
+      lat, lng, ibge
     });
 
     res.json(result);

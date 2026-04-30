@@ -13,18 +13,20 @@ const sefazClient = axios.create({
   }
 });
 
-async function searchProducts({ descricao, gtin, dias = 7 }) {
-  const cacheKey = `search:${descricao || ''}:${gtin || ''}:${dias}`;
+async function searchProducts({ descricao, gtin, dias = 7, lat, lng, ibge }) {
+  const cacheKey = `search:${descricao || ''}:${gtin || ''}:${dias}:${lat || ''}:${lng || ''}:${ibge || ''}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
+  const estabelecimento = lat && lng
+    ? { geolocalizacao: { latitude: parseFloat(lat), longitude: parseFloat(lng), raio: 15 } }
+    : { municipio: { codigoIBGE: parseInt(ibge) || parseInt(process.env.MUNICIPIO_IBGE) || 2704302 } };
+
   const bodyBase = {
     produto: {},
-    estabelecimento: {
-      municipio: { codigoIBGE: parseInt(process.env.MUNICIPIO_IBGE) || 2704302 }
-    },
+    estabelecimento,
     dias,
-    registrosPorPagina: 5000
+    registrosPorPagina: 50
   };
 
   if (gtin) bodyBase.produto.gtin = gtin;
@@ -40,23 +42,11 @@ async function searchProducts({ descricao, gtin, dias = 7 }) {
     }
 
     const primeira = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina: 1 });
-    const dadosPrimeira = primeira.data;
-    const totalPaginas = dadosPrimeira.totalPaginas || 1;
-    const conteudo = [...(dadosPrimeira.conteudo || [])];
-
-    console.log(`[SEFAZ] totalRegistros=${dadosPrimeira.totalRegistros} totalPaginas=${totalPaginas}`);
-
-    for (let pagina = 2; pagina <= totalPaginas; pagina++) {
-      const resp = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina });
-      if (resp.data?.conteudo?.length) conteudo.push(...resp.data.conteudo);
-      if (resp.data?.ultimaPagina) break;
-    }
-
-    rawData = { ...dadosPrimeira, conteudo };
+    rawData = primeira.data;
+    console.log(`[SEFAZ] totalRegistros=${rawData.totalRegistros} registros=${rawData.conteudo?.length}`);
   } catch (err) {
     console.warn(`[SEFAZ API] Usando dados simulados. Motivo: ${err.message}`);
-    const mockResult = getMockData(descricao || gtin);
-    rawData = mockResult;
+    rawData = getMockData(descricao || gtin);
     usedMock = true;
   }
 

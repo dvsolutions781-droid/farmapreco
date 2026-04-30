@@ -9,6 +9,10 @@ function getSessionId() {
 
 const BASE_URL = '/api';
 
+// Quando VITE_SEARCH_BASE_URL está definido, busca vai direto ao servidor em São Paulo (Fly.io)
+// sem passar pelo Netlify — resolve o timeout de 10s com a API SEFAZ
+const SEARCH_ORIGIN = import.meta.env.VITE_SEARCH_BASE_URL || '';
+
 async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: {
@@ -34,7 +38,12 @@ export const api = {
     else if (q) params.set('q', q);
     if (location?.lat) { params.set('lat', location.lat); params.set('lng', location.lng); }
     else if (ibge) params.set('ibge', ibge);
-    return request(`/search?${params}`);
+    return fetch(`${SEARCH_ORIGIN}/api/search?${params}`, {
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': getSessionId() }
+    }).then(r => {
+      if (!r.ok) return r.json().catch(() => ({})).then(e => Promise.reject(new Error(e.error || `HTTP ${r.status}`)));
+      return r.json();
+    });
   },
 
   getBasket: () => {
