@@ -1,19 +1,12 @@
-const axios = require('axios');
-
-const sefazClient = axios.create({
-  baseURL: process.env.SEFAZ_API_URL || 'http://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public',
-  timeout: 9000,
-  headers: {
-    'Content-Type': 'application/json',
-    'AppToken': process.env.SEFAZ_APP_TOKEN || ''
-  }
-});
-
 const CORS_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, X-Session-Id'
 };
+
+const SEFAZ_BASE = process.env.SEFAZ_API_URL
+  || 'https://api.sefaz.al.gov.br/sfz-economiza-alagoas-api/api/public';
+const APP_TOKEN = process.env.SEFAZ_APP_TOKEN || '';
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -38,23 +31,40 @@ exports.handler = async (event) => {
     ? { geolocalizacao: { latitude: parseFloat(lat), longitude: parseFloat(lng), raio: 15 } }
     : { municipio: { codigoIBGE: parseInt(ibge) || parseInt(process.env.MUNICIPIO_IBGE) || 2704302 } };
 
-  const bodyBase = {
-    produto: {},
+  const bodyReq = {
+    produto: gtin ? { gtin: gtin.trim() } : { descricao: q.trim().toUpperCase() },
     estabelecimento,
     dias: Math.min(parseInt(dias) || 7, 10),
-    registrosPorPagina: 50
+    registrosPorPagina: 50,
+    pagina: 1
   };
 
-  if (gtin) bodyBase.produto.gtin = gtin.trim();
-  else bodyBase.produto.descricao = q.trim().toUpperCase();
-
   try {
-    const response = await sefazClient.post('/produto/pesquisa', { ...bodyBase, pagina: 1 });
-    const normalized = normalizeResponse(response.data, q || gtin);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+    const response = await fetch(`${SEFAZ_BASE}/produto/pesquisa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'AppToken': APP_TOKEN },
+      body: JSON.stringify(bodyReq),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      throw Object.assign(new Error(errBody.slice(0, 200) || `status ${response.status}`), {
+        code: `HTTP_${response.status}`
+      });
+    }
+
+    const data = await response.json();
+    const normalized = normalizeResponse(data, q || gtin);
     return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify(normalized) };
+
   } catch (err) {
-    const errCode = err.code || (err.response ? `HTTP_${err.response.status}` : 'UNKNOWN');
-    const errMsg = err.response?.data ? JSON.stringify(err.response.data).slice(0, 200) : err.message;
+    const errCode = err.name === 'AbortError' ? 'TIMEOUT_9S' : (err.code || err.name || 'UNKNOWN');
+    const errMsg = (err.message || '').slice(0, 300);
     console.error('[search] erro SEFAZ:', errCode, errMsg);
     return {
       statusCode: 200,
